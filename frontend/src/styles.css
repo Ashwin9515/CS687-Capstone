@@ -1,0 +1,100 @@
+:root {
+  --ink: #0f172a;
+  --muted: #475569;
+  --line: #e6e8ef;
+  --card: #ffffff;
+  --shadow: 0 8px 20px rgba(0,0,0,.15);
+  --blue: #0ea5e9;
+  --blue-dark: #0284c7;
+}
+
+/* === Global background === */
+body {
+  margin: 0;
+  font-family: Inter, system-ui, Arial, sans-serif;
+  color: var(--ink);
+
+  /* Full-page background image */
+  background: ("/workspaces/CS687_COMPUTER-SCIENCE_CAP-STONE_SRIRAM-BAIRI/FitGenie/backend/Public/bg-fitness.png") no-repeat center center fixed;
+  background-size: center;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, Arial, sans-serif;
+  color: #0f172a;
+
+  /* Full-page background */
+  background: url("/workspaces/CS687_COMPUTER-SCIENCE_CAP-STONE_SRIRAM-BAIRI/FitGenie/backend/Public/bg-fitness.png") no-repeat center center fixed;
+  background-size: middle;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 2rem auto;
+  padding: 1.5rem;
+
+  /* Frosted glass effect */
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.25);
+}
+
+
+/* Stats cards */
+.stats { 
+  display: grid; gap: 1rem; 
+  grid-template-columns: repeat(4, minmax(200px,1fr)); 
+  margin: 1rem 0 1.2rem; 
+}
+.stat { 
+  padding: 1rem; border-radius: 16px; 
+  color: #fff; 
+  box-shadow: 0 10px 20px rgba(0,0,0,.15); 
+}
+.stat-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:.4rem }
+.stat-title { opacity:.95; font-weight:600 }
+.stat-value { font-size: clamp(20px, 3vw, 32px); font-weight:800; line-height:1.1 }
+.stat-sub { opacity:.9; margin-top:.2rem; font-size:.9rem }
+
+.g1{ background: linear-gradient(135deg,#60a5fa,#48a0c6) }
+.g2{ background: linear-gradient(135deg,#44dde5,#22d3ee) }
+.g3{ background: linear-gradient(135deg,#60a5fa,#6366f1) }
+.g4{ background: linear-gradient(135deg,#22d3ee,#06b6d4) }
+
+/* Progress ring */
+.ring { position:relative; width:220px; height:220px }
+.ring-svg { width:100%; height:100%; transform: rotate(-90deg) }
+.ring-bg{ fill: none; stroke: #e6e8ef; stroke-width:12 }
+.ring-fg{ fill: none; stroke: #10b981; stroke-linecap: round; stroke-width:12; transition: stroke-dasharray .6s ease }
+.ring-center{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center }
+.ring-value{ font-size:40px; font-weight:800 }
+.ring-label{ color:#475569 }
+.ring-caption{ margin:.6rem 0 1rem; color:#334155 }
+
+/* Quick actions */
+.quick-actions.card{ display:flex; flex-direction:column }
+.qa-grid{ display:grid; gap:.6rem; grid-template-columns: repeat(2, minmax(180px,1fr)); margin-top:.6rem }
+.btn{ padding:.55rem .9rem; border:1px solid var(--blue); background:var(--blue); color:#fff; border-radius:10px; cursor:pointer; font-weight:600 }
+.btn:hover{ background:var(--blue-dark); border-color:var(--blue-dark) }
+.btn.subtle{ background:#f1f5f9; border-color:#e2e8f0; color:var(--ink) }
+.btn.subtle:hover{ background:#e2e8f0 }
+.btn.qa{ display:flex; flex-direction:column; align-items:flex-start; gap:.15rem }
+.btn.qa small{ font-weight:500; opacity:.95 }
+
+/* Cards */
+.grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit,minmax(280px,1fr)) }
+.card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:1rem; box-shadow:0 2px 8px rgba(0,0,0,.08) }
+.card h3 { margin: 0 0 .6rem }
+.row { display:flex; gap:.5rem; margin-top:.5rem }
+.status { color:var(--muted); margin-top:.5rem }
+ul { padding-left: 1.2rem }
+.card.error{ border-color:#fecaca; background:#fff1f2 }
+
+@media (max-width: 860px){ 
+  .stats{ grid-template-columns: 1fr 1fr } 
+  .wellness-row{ grid-template-columns: 1fr } 
+}
