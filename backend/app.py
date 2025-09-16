@@ -26,8 +26,8 @@ from flask_jwt_extended import (
 
 # --- project modules ---
 from models import user_doc, sensordata_doc, feedback_doc
-from behavior_model import BehaviorModel
-from ai_engine import generate_plan, generate_nudges
+from rules import BehaviorModel
+from system_function import generate_plan, generate_nudges
 
 # ----------------- logging -----------------
 logging.basicConfig(level=logging.INFO)

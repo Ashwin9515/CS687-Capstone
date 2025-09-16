@@ -15,7 +15,7 @@ class BehaviorModel:
     - readiness_score(): normalized physiological indicators (HR, SleepScore)
     - next_best_intensity(): suggested level with hysteresis for stability
     """
-
+    
     def __init__(self, db):
         self.db = db
 
