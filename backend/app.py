@@ -2,6 +2,7 @@ import os
 import uuid
 import time
 import json
+import logging
 from datetime import date, datetime, timedelta
 from bson import ObjectId
 
@@ -18,25 +19,30 @@ try:
 except Exception:
     _CERT_PATH = None
 
-# Authentication
-# JWT is optional for back-compat. If a JWT is present we use it; otherwise we fall back to X-User-Id.
+# Auth (JWT optional; we still support X-User-Id)
 from flask_jwt_extended import (
     JWTManager, create_access_token, get_jwt_identity, jwt_required
 )
 
-# project modules
+# --- project modules ---
 from models import user_doc, sensordata_doc, feedback_doc
 from behavior_model import BehaviorModel
 from ai_engine import generate_plan, generate_nudges
 
-# setup
+# ----------------- logging -----------------
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# ----------------- setup -----------------
 load_dotenv()
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("DB_NAME", "ai_fitness")
 
 def make_client(uri: str) -> MongoClient:
+    """Create a Mongo client with TLS for Atlas."""
     kwargs = {"serverSelectionTimeoutMS": 30000}
     if uri.startswith("mongodb+srv://") or "mongodb.net" in uri:
+        kwargs["tls"] = True
         if _CERT_PATH:
             kwargs["tlsCAFile"] = _CERT_PATH
     return MongoClient(uri, **kwargs)
@@ -44,9 +50,9 @@ def make_client(uri: str) -> MongoClient:
 app = Flask(__name__)
 CORS(app)
 
-# JWT config (optional)
+# JWT (optional)
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")
-app.config["JWT_TOKEN_LOCATION"] = ["headers"]  # Expect "Authorization: Bearer <token>"
+app.config["JWT_TOKEN_LOCATION"] = ["headers"]  # Authorization: Bearer <token>
 jwt = JWTManager(app)
 
 client = make_client(MONGO_URI)
@@ -54,15 +60,17 @@ db = client[DB_NAME]
 
 behavior = BehaviorModel(db)
 
-# helpers
-def get_user_id_fallback():
-    # Fallback to header for compatibility with current frontend
-    return request.headers.get("X-User-Id", "U123")
-
-def get_user_id():
-    """Prefer JWT identity if present; otherwise fall back to X-User-Id header."""
+# ----------------- helpers -----------------
+def get_user_id() -> str:
+    """Prefer JWT identity; else X-User-Id; else stable dev fallback."""
     identity = get_jwt_identity()
-    return identity if identity else get_user_id_fallback()
+    if identity:
+        return identity
+    user_id = request.headers.get("X-User-Id")
+    if not user_id:
+        user_id = "U123"  # stable fallback for dev/demo
+        logger.warning("No auth provided; using fallback userId U123")
+    return user_id
 
 def _normalize_plan_doc(doc):
     """Return a JSON-safe plan dict."""
@@ -82,7 +90,7 @@ def video_doc(user_id: str, title: str, url: str, tags=None):
         "title": title,
         "url": url,
         "tags": tags or [],
-        "ts": datetime.utcnow(),
+        "ts": datetime.now(datetime.UTC),
     }
 
 def ensure_indexes():
@@ -93,25 +101,25 @@ def ensure_indexes():
         db.recommendations.create_index([("userId", 1), ("ts", -1)])
         db.videos.create_index([("id", 1)], unique=True)
     except Exception as e:
-        print("[WARN] Failed to create indexes:", e)
+        logger.warning(f"Failed to create indexes: {e}")
 
-# workout videos
+# ----------------- seed workout videos -----------------
 def seed_videos_if_empty():
     if db.videos.count_documents({}) > 0:
         return
     seed = [
         {"id": "vid-hand", "userId": "system", "title": "Hand Workout",
-         "url": "https://youtu.be/dCtwWNTnOq4?si=SdnfaFW4FoTPY0mQ", "tags": ["hand","arms"], "ts": datetime.utcnow()},
+         "url": "https://youtu.be/dCtwWNTnOq4?si=SdnfaFW4FoTPY0mQ", "tags": ["hand","arms"], "ts": datetime.now(datetime.UTC)},
         {"id": "vid-leg", "userId": "system", "title": "Leg Workout",
-         "url": "https://youtu.be/ZZI__bqlBkQ?si=-EKIMAmKT1irFzQB", "tags": ["legs","lowerbody"], "ts": datetime.utcnow()},
+         "url": "https://youtu.be/ZZI__bqlBkQ?si=-EKIMAmKT1irFzQB", "tags": ["legs","lowerbody"], "ts": datetime.now(datetime.UTC)},
         {"id": "vid-chest", "userId": "system", "title": "Chest Workout",
-         "url": "https://youtu.be/Qv4AvwQq5ok?si=GhPuNYhpGu2gM5S2", "tags": ["chest","upperbody"], "ts": datetime.utcnow()},
+         "url": "https://youtu.be/Qv4AvwQq5ok?si=GhPuNYhpGu2gM5S2", "tags": ["chest","upperbody"], "ts": datetime.now(datetime.UTC)},
         {"id": "vid-shoulder", "userId": "system", "title": "Shoulder Workout",
-         "url": "https://youtu.be/mUI4hXTmAkw?si=T1WzHASxkyjzFOi7", "tags": ["shoulder","upperbody"], "ts": datetime.utcnow()},
+         "url": "https://youtu.be/mUI4hXTmAkw?si=T1WzHASxkyjzFOi7", "tags": ["shoulder","upperbody"], "ts": datetime.now(datetime.UTC)},
         {"id": "vid-mobility-10", "userId": "system", "title": "10-Minute Morning Mobility",
-         "url": "https://www.youtube.com/watch?v=Z4ziWoIo6lM", "tags": ["mobility","stretch"], "ts": datetime.utcnow()},
+         "url": "https://www.youtube.com/watch?v=Z4ziWoIo6lM", "tags": ["mobility","stretch"], "ts": datetime.now(datetime.UTC)},
         {"id": "vid-hiit-20", "userId": "system", "title": "20-Minute Full Body HIIT",
-         "url": "https://www.youtube.com/watch?v=ml6cT4AZdqI", "tags": ["hiit","cardio"], "ts": datetime.utcnow()},
+         "url": "https://www.youtube.com/watch?v=ml6cT4AZdqI", "tags": ["hiit","cardio"], "ts": datetime.now(datetime.UTC)},
     ]
     db.videos.insert_many(seed)
 
@@ -119,15 +127,15 @@ try:
     ensure_indexes()
     seed_videos_if_empty()
 except Exception as se:
-    print("[WARN] Startup tasks issue:", se)
+    logger.warning(f"[Startup] Issue: {se}")
 
-# error handling
+# ----------------- error handling -----------------
 @app.errorhandler(Exception)
 def handle_exception(e):
-    # You can get more granular if needed (HTTPException.code etc.)
+    logger.exception("Unhandled exception")
     return jsonify({"success": False, "error": str(e)}), 500
 
-# routes
+# ----------------- routes -----------------
 @app.get("/")
 def root():
     return {
@@ -153,9 +161,9 @@ def health():
         client.admin.command("ping")
     except Exception:
         status = "degraded"
-    return {"status": status, "time": datetime.utcnow().isoformat()}
+    return {"status": status, "time": datetime.now(datetime.UTC).isoformat()}
 
-# auth / user
+# --- auth / user ---
 @app.post("/auth/login")
 def login():
     """
@@ -183,19 +191,25 @@ def me():
     except (PyMongoError, ServerSelectionTimeoutError) as e:
         return jsonify({"error": "database_unreachable", "detail": str(e)}), 503
 
-# metrics
+# --- metrics ---
 @app.post("/me/metrics")
 @jwt_required(optional=True)
 def ingest_metrics():
     """Insert metrics samples (HR, Steps, SleepScore, etc.)."""
     user_id = get_user_id()
     payload = request.json
+    if payload is None:
+        return jsonify({"error": "invalid_json"}), 400
+
+    items = payload if isinstance(payload, list) else [payload]
     docs = []
-    if isinstance(payload, list):
-        for m in payload:
-            docs.append(sensordata_doc(user_id, m["metricType"], m["value"]))
-    else:
-        docs.append(sensordata_doc(user_id, payload["metricType"], payload["value"]))
+    for m in items:
+        mt = (m or {}).get("metricType")
+        val = (m or {}).get("value")
+        if mt is None or val is None:
+            return jsonify({"error": "missing_fields", "detail": "metricType and value required"}), 400
+        docs.append(sensordata_doc(user_id, mt, val))
+
     try:
         if docs:
             db.sensordata.insert_many(docs)
@@ -212,8 +226,8 @@ def set_steps():
     steps = int(body.get("value", 0))
     today = date.today().isoformat()
 
-    doc = sensordata_doc(user_id, "Steps", steps)
-    doc["date"] = today
+    # use models.sensordata_doc day-level rollup
+    doc = sensordata_doc(user_id, "Steps", steps, date_str=today)
 
     try:
         db.sensordata.update_one(
@@ -238,7 +252,7 @@ def list_metrics():
     except (PyMongoError, ServerSelectionTimeoutError) as e:
         return jsonify({"error": "database_unreachable", "detail": str(e)}), 503
 
-# daily plan
+# --- daily plan ---
 @app.get("/me/plan")
 @jwt_required(optional=True)
 def get_plan():
@@ -261,7 +275,7 @@ def start_plan():
     try:
         db.plans.update_one(
             {"userId": user_id, "date": today},
-            {"$set": {"status": "In Progress", "startedAt": datetime.utcnow()}},
+            {"$set": {"status": "In Progress", "startedAt": datetime.now(datetime.UTC)}},
             upsert=True
         )
         doc = db.plans.find_one({"userId": user_id, "date": today}, {"_id": 0})
@@ -284,7 +298,7 @@ def complete_plan():
     except (PyMongoError, ServerSelectionTimeoutError) as e:
         return jsonify({"error": "database_unreachable", "detail": str(e)}), 503
 
-# week planning
+# --- week planning ---
 def _upsert_plan_for_date(user_id: str, the_date: date):
     user = db.users.find_one({"userId": user_id}) or user_doc(user_id)
     plan = generate_plan(user, behavior, db)  # dict
@@ -340,7 +354,7 @@ def start_plan_on_date(the_date):
         _upsert_plan_for_date(user_id, date(y, m, d))
         db.plans.update_one(
             {"userId": user_id, "date": the_date},
-            {"$set": {"status": "In Progress", "startedAt": datetime.utcnow()}},
+            {"$set": {"status": "In Progress", "startedAt": datetime.now(datetime.UTC)}},
             upsert=True
         )
         doc = db.plans.find_one({"userId": user_id, "date": the_date}, {"_id": 0})
@@ -363,7 +377,7 @@ def complete_plan_on_date(the_date):
     except (PyMongoError, ServerSelectionTimeoutError) as e:
         return jsonify({"error": "database_unreachable", "detail": str(e)}), 503
 
-# recommendations / nudges
+# --- recommendations / nudges ---
 @app.get("/me/recommendations")
 @jwt_required(optional=True)
 def get_recs():
@@ -387,7 +401,7 @@ def make_nudge():
     except (PyMongoError, ServerSelectionTimeoutError) as e:
         return jsonify({"error": "database_unreachable", "detail": str(e)}), 503
 
-# feedback
+# --- feedback ---
 @app.post("/me/feedback")
 @jwt_required(optional=True)
 def give_feedback():
@@ -406,7 +420,7 @@ def give_feedback():
     except (PyMongoError, ServerSelectionTimeoutError) as e:
         return jsonify({"error": "database_unreachable", "detail": str(e)}), 503
 
-# AI Coach
+# --- AI Coach ---
 @app.post("/coach/ask")
 @jwt_required(optional=True)
 def coach_ask():
@@ -426,17 +440,7 @@ def coach_ask():
     )
     return jsonify({"reply": reply})
 
-# Real-time nudges
-@app.get("/stream/nudges")
-def stream_nudges():
-    def event_stream():
-        while True:
-            time.sleep(15)
-            nudge = {"message": "Stand up and stretch for 1–2 minutes."}
-            yield f"data: {json.dumps(nudge)}\n\n"
-    return Response(event_stream(), mimetype="text/event-stream")
-
-# Workout Videos CRUD
+# --- Workout Videos CRUD ---
 @app.get("/videos")
 @jwt_required(optional=True)
 def list_videos():
@@ -462,25 +466,32 @@ def add_or_update_video():
     """
     Create or update a video.
     Body: { title, url, tags?: [..], id?: "existing-id" }
-    If id provided and found -> update; else create new.
+    If id provided and found -> update (owner-only); else create new.
     """
     user_id = get_user_id()
     body = request.json or {}
     title = (body.get("title") or "").strip()
     url   = (body.get("url") or "").strip()
     tags  = body.get("tags") or []
+    vid_id = body.get("id")
 
     if not title or not url:
         return jsonify({"error": "missing_fields", "detail": "title and url required"}), 400
 
     try:
-        vid_id = body.get("id")
         if vid_id:
-            db.videos.update_one({"id": vid_id}, {"$set": {
-                "title": title, "url": url, "tags": tags, "ts": datetime.utcnow()
-            }}, upsert=False)
-            doc = db.videos.find_one({"id": vid_id}, {"_id": 0})
-            if not doc:
+            existing = db.videos.find_one({"id": vid_id})
+            if existing:
+                # only owner can update; protect system videos
+                if existing.get("userId") == "system":
+                    return jsonify({"error": "forbidden", "detail": "system videos cannot be modified"}), 403
+                if existing.get("userId") != user_id:
+                    return jsonify({"error": "forbidden"}), 403
+                db.videos.update_one({"id": vid_id}, {"$set": {
+                    "title": title, "url": url, "tags": tags, "ts": datetime.now(datetime.UTC)
+                }})
+                doc = db.videos.find_one({"id": vid_id}, {"_id": 0})
+            else:
                 newdoc = video_doc(user_id, title, url, tags)
                 newdoc["id"] = vid_id
                 db.videos.insert_one(newdoc)
@@ -505,12 +516,19 @@ def delete_video():
     if not vid_id:
         return jsonify({"error": "missing_id"}), 400
     try:
+        v = db.videos.find_one({"id": vid_id})
+        if not v:
+            return jsonify({"error": "not_found"}), 404
+        if v.get("userId") == "system":
+            return jsonify({"error": "forbidden", "detail": "system videos cannot be deleted"}), 403
+        if v.get("userId") != get_user_id():
+            return jsonify({"error": "forbidden"}), 403
         db.videos.delete_one({"id": vid_id})
         return {"ok": True}
     except (PyMongoError, ServerSelectionTimeoutError) as e:
         return jsonify({"error": "database_unreachable", "detail": str(e)}), 503
 
-# Goals
+# --- GOALS (CRUD + live progress) ---
 def _steps_today(user_id):
     today = date.today().isoformat()
     total = 0
@@ -601,7 +619,7 @@ def goals_create():
         "title": b.get("title", gtype.replace("_", " ").title()),
         "deadline": b.get("deadline"),
         "status": "Active",
-        "createdAt": datetime.utcnow(),
+        "createdAt": datetime.now(datetime.UTC),
     }
     try:
         g["id"] = str(g["_id"])
@@ -647,9 +665,20 @@ def goals_delete(gid):
     except (PyMongoError, ServerSelectionTimeoutError) as e:
         return jsonify({"error":"database_unreachable","detail":str(e)}), 503
 
-# main
+# --- Real-time nudges (SSE) ---
+@app.get("/stream/nudges")
+@jwt_required(optional=True)
+def stream_nudges():
+    user_id = get_user_id()
+    def event_stream():
+        while True:
+            time.sleep(15)
+            yield f"data: {json.dumps({'userId': user_id, 'message': 'Stand up and stretch for 1–2 minutes.'})}\n\n"
+    return Response(event_stream(), mimetype="text/event-stream")
+
+# ----------------- main -----------------
 if __name__ == "__main__":
     if (MONGO_URI.startswith("mongodb+srv://") or "mongodb.net" in MONGO_URI) and not _CERT_PATH:
-        print("[WARN] Using MongoDB Atlas but 'certifi' is not installed. "
-              "Install with 'pip install certifi' to avoid TLS errors.")
+        logger.warning("Using MongoDB Atlas but 'certifi' is not installed. "
+                       "Run 'pip install certifi' to avoid TLS errors.")
     app.run(host="0.0.0.0", port=5000)

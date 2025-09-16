@@ -2,16 +2,18 @@ from __future__ import annotations
 from datetime import datetime, date
 from typing import Any, Dict, List, Optional, Union
 
+# Type alias for numeric values
 Number = Union[int, float]
 
 # ---- helpers ----
+
 def iso_today() -> str:
     return date.today().isoformat()
 
 def _coerce_metric_value(metric_type: str, value: Any) -> Number:
     """
     Best-effort numeric coercion so analytics don't break on strings.
-    Steps -> int, HR/SleepScore -> float, else try float.
+    Steps → int, HR/SleepScore → float, else try float.
     """
     try:
         if metric_type == "Steps":
@@ -20,16 +22,18 @@ def _coerce_metric_value(metric_type: str, value: Any) -> Number:
             return float(value)
         return float(value)
     except (TypeError, ValueError):
-        # As a last resort, store as-is; downstream code should guard.
-        return value  # type: ignore[return-value]
+        return value  # Last resort fallback — caller must guard
 
-# ---- factories ----
+# ---- document factories ----
+
 def user_doc(user_id: str = "U123", name: str = "Demo User") -> Dict[str, Any]:
     return {
         "userId": user_id,
         "name": name,
-        # keep preferences; remove embedded goals (goals are a separate collection)
-        "preferences": {"daysPerWeek": 4, "equip": ["bodyweight", "dumbbells"]},
+        "preferences": {
+            "daysPerWeek": 4,
+            "equip": ["bodyweight", "dumbbells"]
+        },
         "createdAt": datetime.utcnow(),
     }
 
@@ -49,7 +53,7 @@ def sensordata_doc(
         "value": _coerce_metric_value(metric_type, value),
     }
     if date_str:
-        doc["date"] = date_str  # e.g., day-level rollup for steps
+        doc["date"] = date_str  # Optional: pre-processed day-level key
     return doc
 
 def plan_doc(
@@ -60,7 +64,7 @@ def plan_doc(
 ) -> Dict[str, Any]:
     return {
         "userId": user_id,
-        "date": date or iso_today(),  # <-- renamed param (was plan_date)
+        "date": date or iso_today(),
         "items": items,
         "status": status,
     }
